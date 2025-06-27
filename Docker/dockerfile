@@ -1,10 +1,10 @@
 FROM caddy:2-alpine
 
-COPY ./app /srv
+COPY --chown=nobody:nobody ./app /srv
 
 USER nobody:nobody
 ENV CADDYFILE_PATH=/etc/caddy/Caddyfile
 
-COPY --chown=nobody:nobody ./docker/Caddyfile /etc/caddy/Caddyfile
+COPY --chown=nobody:nobody ./docker/caddyfile /etc/caddy/Caddyfile
 
 VOLUME ["/data"]
