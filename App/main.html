@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DVD Bounce</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: black; overflow: hidden; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <canvas id="screen"></canvas>
+  <script>
+    const canvas = document.getElementById('screen');
+    const ctx = canvas.getContext('2d');
+    let w, h;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let dvd = { x: 100, y: 100, dx: 2, dy: 2, size: 100 };
+    let baseColor = [0, 100, 200]; // RGB
+
+    function varyColor(color, delta = 10) {
+      return color.map(c => Math.min(255, Math.max(0, c + Math.floor((Math.random() - 0.5) * delta * 2))));
+    }
+
+    function randColor() {
+      return [Math.random()*255, Math.random()*255, Math.random()*255];
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = `rgb(${baseColor.join(",")})`;
+      ctx.fillRect(dvd.x, dvd.y, dvd.size, dvd.size);
+    }
+
+    function update() {
+      let hitCorner = false;
+      if (dvd.x + dvd.size >= w || dvd.x <= 0) {
+        dvd.dx *= -1;
+        baseColor = varyColor(baseColor);
+        if ((dvd.y <= 0 || dvd.y + dvd.size >= h)) hitCorner = true;
+      }
+      if (dvd.y + dvd.size >= h || dvd.y <= 0) {
+        dvd.dy *= -1;
+        baseColor = varyColor(baseColor);
+        if ((dvd.x <= 0 || dvd.x + dvd.size >= w)) hitCorner = true;
+      }
+      if (hitCorner) baseColor = randColor();
+      dvd.x += dvd.dx;
+      dvd.y += dvd.dy;
+      draw();
+      requestAnimationFrame(update);
+    }
+
+    canvas.addEventListener('click', () => {
+      if (Math.random() < 0.5) dvd.dx *= -1;
+      else dvd.dy *= -1;
+    });
+
+    update();
+  </script>
+</body>
+</html>
