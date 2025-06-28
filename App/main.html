@@ -25,16 +25,18 @@
     const canvas = document.getElementById('screen');
     const ctx = canvas.getContext('2d');
     let w, h;
-    
+
     function resize() {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
     }
-    
+
     window.addEventListener('resize', resize);
     resize();
-    
-    // DVD logo state
+
+    const dvdLogo = new Image();
+    dvdLogo.src = 'DVD_logo.svg';
+
     let dvd = { 
       x: 200, 
       y: 150, 
@@ -43,18 +45,18 @@
       width: 140,
       height: 60
     };
-    
+
     let color = [255, 100, 200];
     let forceCornerNextHit = false;
     let targetCorner = null;
-    
+
     function shadeColor(currentColor) {
       return currentColor.map(c => {
         const variation = (Math.random() - 0.5) * 120;
         return Math.max(0, Math.min(255, c + variation));
       });
     }
-    
+
     function randomColor() {
       return [
         Math.floor(Math.random() * 256),
@@ -62,171 +64,141 @@
         Math.floor(Math.random() * 256)
       ];
     }
-    
+
     function findClosestCorner() {
       const corners = [
-        { x: 0, y: 0 }, // top-left
-        { x: w - dvd.width, y: 0 }, // top-right
-        { x: 0, y: h - dvd.height }, // bottom-left
-        { x: w - dvd.width, y: h - dvd.height } // bottom-right
+        { x: 0, y: 0 },
+        { x: w - dvd.width, y: 0 },
+        { x: 0, y: h - dvd.height },
+        { x: w - dvd.width, y: h - dvd.height }
       ];
-      
-      let closestCorner = corners[0];
-      let minDistance = Infinity;
-      
-      corners.forEach(corner => {
-        const distance = Math.sqrt(
-          Math.pow(corner.x - dvd.x, 2) + Math.pow(corner.y - dvd.y, 2)
-        );
-        if (distance < minDistance) {
-          minDistance = distance;
-          closestCorner = corner;
+
+      let closest = corners[0], minDist = Infinity;
+      for (const corner of corners) {
+        const dx = corner.x - dvd.x;
+        const dy = corner.y - dvd.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < minDist) {
+          minDist = dist;
+          closest = corner;
         }
-      });
-      
-      return closestCorner;
+      }
+      return closest;
     }
-    
+
     function calculateTrajectoryToCorner(corner) {
-      const deltaX = corner.x - dvd.x;
-      const deltaY = corner.y - dvd.y;
-      
-      // Calculate the speed magnitude to maintain similar motion speed
+      const dx = corner.x - dvd.x;
+      const dy = corner.y - dvd.y;
       const speed = Math.sqrt(dvd.dx * dvd.dx + dvd.dy * dvd.dy);
-      
-      // Normalize the direction vector
-      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-      
+      const distance = Math.sqrt(dx * dx + dy * dy);
       if (distance === 0) return { dx: dvd.dx, dy: dvd.dy };
-      
       return {
-        dx: (deltaX / distance) * speed,
-        dy: (deltaY / distance) * speed
+        dx: (dx / distance) * speed,
+        dy: (dy / distance) * speed
       };
     }
-    
+
     function isAtCorner() {
-      const tolerance = 2;
+      const tol = 2;
       return (
-        (Math.abs(dvd.x) < tolerance || Math.abs(dvd.x - (w - dvd.width)) < tolerance) &&
-        (Math.abs(dvd.y) < tolerance || Math.abs(dvd.y - (h - dvd.height)) < tolerance)
+        (Math.abs(dvd.x) < tol || Math.abs(dvd.x - (w - dvd.width)) < tol) &&
+        (Math.abs(dvd.y) < tol || Math.abs(dvd.y - (h - dvd.height)) < tol)
       );
     }
-    
+
+    const offscreen = document.createElement('canvas');
+    const offCtx = offscreen.getContext('2d');
+
+    function drawTintedDVD() {
+      offscreen.width = dvd.width;
+      offscreen.height = dvd.height;
+
+      offCtx.clearRect(0, 0, dvd.width, dvd.height);
+      offCtx.globalCompositeOperation = 'source-over';
+      offCtx.drawImage(dvdLogo, 0, 0, dvd.width, dvd.height);
+
+      offCtx.globalCompositeOperation = 'source-in';
+      offCtx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
+      offCtx.fillRect(0, 0, dvd.width, dvd.height);
+
+      ctx.drawImage(offscreen, dvd.x, dvd.y);
+    }
+
     function drawDVD() {
       ctx.clearRect(0, 0, w, h);
-      
-      // Main rectangle with rounded corners
-      ctx.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`;
-      ctx.beginPath();
-      ctx.roundRect(dvd.x, dvd.y, dvd.width, dvd.height, 6);
-      ctx.fill();
-      
-      // Gradient overlay for 3D effect
-      const grad = ctx.createLinearGradient(dvd.x, dvd.y, dvd.x, dvd.y + dvd.height);
-      grad.addColorStop(0, 'rgba(255,255,255,0.4)');
-      grad.addColorStop(0.3, 'rgba(255,255,255,0.1)');
-      grad.addColorStop(0.7, 'rgba(0,0,0,0.1)');
-      grad.addColorStop(1, 'rgba(0,0,0,0.3)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.roundRect(dvd.x, dvd.y, dvd.width, dvd.height, 6);
-      ctx.fill();
-      
-      // DVD text
-      ctx.fillStyle = 'white';
-      ctx.font = `bold ${dvd.height * 0.4}px Arial`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('DVD', dvd.x + dvd.width/2, dvd.y + dvd.height/2);
-      
-      // Border
-      ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.roundRect(dvd.x, dvd.y, dvd.width, dvd.height, 6);
-      ctx.stroke();
+      if (dvdLogo.complete) {
+        drawTintedDVD();
+      }
     }
-    
+
     function animate() {
-      // Move DVD
       dvd.x += dvd.dx;
       dvd.y += dvd.dy;
-      
+
       let hitWall = false;
       let hitCorner = false;
-      
-      // Check walls and bounce
+
       if (dvd.x <= 0) {
         dvd.x = 0;
         dvd.dx = Math.abs(dvd.dx);
         hitWall = true;
         if (dvd.y <= 0 || dvd.y >= h - dvd.height) hitCorner = true;
       }
-      
       if (dvd.x >= w - dvd.width) {
         dvd.x = w - dvd.width;
         dvd.dx = -Math.abs(dvd.dx);
         hitWall = true;
         if (dvd.y <= 0 || dvd.y >= h - dvd.height) hitCorner = true;
       }
-      
       if (dvd.y <= 0) {
         dvd.y = 0;
         dvd.dy = Math.abs(dvd.dy);
         hitWall = true;
         if (dvd.x <= 0 || dvd.x >= w - dvd.width) hitCorner = true;
       }
-      
       if (dvd.y >= h - dvd.height) {
         dvd.y = h - dvd.height;
         dvd.dy = -Math.abs(dvd.dy);
         hitWall = true;
         if (dvd.x <= 0 || dvd.x >= w - dvd.width) hitCorner = true;
       }
-      
-      // Handle color changes and trajectory
+
       if (hitWall) {
         if (hitCorner) {
-          // Corner hit - change to random color and resume normal bouncing
           color = randomColor();
           forceCornerNextHit = false;
           targetCorner = null;
         } else if (forceCornerNextHit) {
-          // We hit a wall while trying to reach a corner - change shade and redirect to corner
           color = shadeColor(color);
           targetCorner = findClosestCorner();
-          const trajectory = calculateTrajectoryToCorner(targetCorner);
-          dvd.dx = trajectory.dx;
-          dvd.dy = trajectory.dy;
+          const t = calculateTrajectoryToCorner(targetCorner);
+          dvd.dx = t.dx;
+          dvd.dy = t.dy;
         } else {
-          // Normal wall hit - just change shade
           color = shadeColor(color);
         }
       }
-      
-      // Check if we've reached the target corner
+
       if (forceCornerNextHit && targetCorner && isAtCorner()) {
         color = randomColor();
         forceCornerNextHit = false;
         targetCorner = null;
       }
-      
+
       drawDVD();
       requestAnimationFrame(animate);
     }
-    
-    // Click handler
+
     canvas.addEventListener('click', () => {
       if (!forceCornerNextHit) {
         forceCornerNextHit = true;
         targetCorner = findClosestCorner();
-        const trajectory = calculateTrajectoryToCorner(targetCorner);
-        dvd.dx = trajectory.dx;
-        dvd.dy = trajectory.dy;
+        const t = calculateTrajectoryToCorner(targetCorner);
+        dvd.dx = t.dx;
+        dvd.dy = t.dy;
       }
     });
-    
+
     animate();
   </script>
 </body>
