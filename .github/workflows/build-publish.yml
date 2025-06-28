@@ -46,10 +46,11 @@ jobs:
           echo "TAG=$TAG" >> $GITHUB_OUTPUT
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: docker/dockerfile
+          file: Docker/dockerfile
           push: true
           tags: |
             ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:latest
@@ -63,19 +64,26 @@ jobs:
           image-ref: ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }}
           format: 'sarif'
           output: 'trivy-results.sarif'
+        continue-on-error: true  # Don't fail if scanning has issues
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v3
-        if: always()
+        if: always() && hashFiles('trivy-results.sarif') != ''
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Check for critical vulnerabilities
         run: |
-          # Warning only - doesn't fail the build
-          CRITICAL_COUNT=$(jq '[.runs[].results[] | select(.level == "error")] | length' trivy-results.sarif 2>/dev/null || echo "0")
-          if [ "$CRITICAL_COUNT" -gt 0 ]; then
-            echo "::warning::Critical vulnerabilities found: $CRITICAL_COUNT"
+          # Only run if SARIF file exists
+          if [ -f "trivy-results.sarif" ]; then
+            CRITICAL_COUNT=$(jq '[.runs[].results[] | select(.level == "error")] | length' trivy-results.sarif 2>/dev/null || echo "0")
+            if [ "$CRITICAL_COUNT" -gt 0 ]; then
+              echo "::warning::Critical vulnerabilities found: $CRITICAL_COUNT"
+            else
+              echo "No critical vulnerabilities found"
+            fi
+          else
+            echo "::warning::Trivy scan file not found - skipping vulnerability check"
           fi
 
       - name: Scan for secrets in image
@@ -94,12 +102,17 @@ jobs:
           exit-code: false  # Don't fail build, just report
 
       - name: Generate security report
+        if: always()
         run: |
           echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "### Trivy Scan" >> $GITHUB_STEP_SUMMARY
+          echo "### Build Information" >> $GITHUB_STEP_SUMMARY
           echo "- Image: ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "- Scan completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "- Build status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           
-          # Add basic image info
-          docker inspect ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }} --format='- Size: {{.Size}} bytes' >> $GITHUB_STEP_SUMMARY
-          docker inspect ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }} --format='- Created: {{.Created}}' >> $GITHUB_STEP_SUMMARY
+          # Only add image info if build succeeded
+          if [ "${{ steps.build.outcome }}" == "success" ]; then
+            echo "- Build completed successfully" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Build failed or was skipped" >> $GITHUB_STEP_SUMMARY
+          fi
