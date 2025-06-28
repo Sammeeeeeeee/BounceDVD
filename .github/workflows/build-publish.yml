@@ -77,3 +77,29 @@ jobs:
           if [ "$CRITICAL_COUNT" -gt 0 ]; then
             echo "::warning::Critical vulnerabilities found: $CRITICAL_COUNT"
           fi
+
+      - name: Scan for secrets in image
+        uses: trufflesecurity/trufflehog@main
+        with:
+          base: ""
+          head: ${{ github.sha }}
+          extra_args: --only-verified
+
+      - name: Docker Scout CVE scanning
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }}
+          only-severities: critical,high
+          exit-code: false  # Don't fail build, just report
+
+      - name: Generate security report
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Trivy Scan" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Scan completed at: $(date)" >> $GITHUB_STEP_SUMMARY
+          
+          # Add basic image info
+          docker inspect ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }} --format='- Size: {{.Size}} bytes' >> $GITHUB_STEP_SUMMARY
+          docker inspect ${{ secrets.DOCKER_USERNAME }}/dvd-bounce:${{ steps.version.outputs.TAG }} --format='- Created: {{.Created}}' >> $GITHUB_STEP_SUMMARY
