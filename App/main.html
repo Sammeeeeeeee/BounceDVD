@@ -29,21 +29,22 @@
     function resize() {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
+      dvd.x = (w - dvd.width) / 2;
+      dvd.y = (h - dvd.height) / 2;
     }
 
     window.addEventListener('resize', resize);
-    resize();
 
     const dvdLogo = new Image();
     dvdLogo.src = './DVD_logo.svg';
 
     let dvd = { 
-      x: 200, 
-      y: 150, 
+      x: 0, 
+      y: 0, 
       dx: 4, 
       dy: 3, 
-      width: 140,
-      height: 60
+      width: 280,
+      height: 120
     };
 
     let color = [255, 100, 200];
@@ -199,6 +200,7 @@
       }
     });
 
+    resize(); // initial setup
     animate();
   </script>
 </body>
