@@ -19,7 +19,7 @@ This project has no practical application, I made it to practice applying secure
 ### Use docker registry
 
 1. ```bash
-	docker run -p 8080:80 sammeeeeeeee/dvd-bounce:latest
+	 docker run -d -p 8080:80 sammeeeee/dvd-bounce
 	```
 2. Visit `http://localhost:8080`
 
