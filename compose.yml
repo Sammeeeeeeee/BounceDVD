@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  dvd-bounce:
+    build:
+      context: .
+      dockerfile: docker/dockerfile  
+      args:
+        BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
+        VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
+    container_name: dvd-bounce
+
+    user: "65532:65532"
+
+    read_only: true
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+
+    security_opt:
+      - no-new-privileges:true
+
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+
+    ports:
+      - "8080:80"   # HTTP
+
+
+    environment:
+      - TZ=Europe/London
+      - CADDY_ADMIN=off
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    restart: unless-stopped
+
+    networks:
+      - dvd_network
+
+networks:
+  dvd_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "false"

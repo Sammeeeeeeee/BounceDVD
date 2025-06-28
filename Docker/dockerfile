@@ -1,10 +1,66 @@
-FROM caddy:2-alpine
+FROM caddy:2.7.6-alpine AS base
 
-COPY --chown=nobody:nobody ./app /srv
+ARG CADDY_VERSION=2.7.6
+ARG BUILD_DATE
+ARG VCS_REF
 
-USER nobody:nobody
-ENV CADDYFILE_PATH=/etc/caddy/Caddyfile
+LABEL maintainer="sam@samhosted.uk" \
+      version="0.2.0" \
+      description="Secure DVD Bounce Application" \
+      build-date=$BUILD_DATE \
+      vcs-ref=$VCS_REF \
+      security.scan="required" \
+      vendor="Sam"
+# update then remove package manager for security
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+      ca-certificates \
+      curl \
+      tzdata && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/* && \
+    rm -rf /sbin/apk /etc/apk /lib/apk /usr/share/apk /var/lib/apk
 
-COPY --chown=nobody:nobody ./docker/caddyfile /etc/caddy/Caddyfile
+RUN addgroup -g 65532 -S dvdapp && \
+    adduser -u 65532 -S dvdapp -G dvdapp -s /sbin/nologin -D -H
 
-VOLUME ["/data"]
+FROM scratch AS final-base
+COPY --from=base / /
+
+FROM final-base AS final
+
+COPY --chown=65532:65532 --chmod=644 ./app /srv
+COPY --chown=65532:65532 --chmod=644 ./config/caddy/caddyfile /etc/caddy/Caddyfile
+
+RUN mkdir -p /var/log/caddy /data /tmp && \
+    chown -R 65532:65532 /var/log/caddy /data /tmp && \
+    chmod 755 /var/log/caddy /data && \
+    chmod 1777 /tmp
+
+# remove possibly danagrous files, set immutable files
+RUN find /srv -type f \( -name "*.tmp" -o -name "*.log" -o -name "*.bak" -o -name "*.sh" -o -name "*.py" -o -name "*.pl" \) -delete && \
+    find /srv -type f -exec chmod 444 {} \; && \
+    find /srv -type d -exec chmod 555 {} \; && \
+    # Make critical files immutable (if supported)
+    find /etc/caddy -type f -exec chmod 444 {} \;
+
+# remove system files that arent needed for security
+RUN rm -rf /root/.* /home/* /etc/passwd- /etc/group- /etc/shadow- 2>/dev/null || true
+
+RUN echo "umask 077" >> /etc/profile
+
+USER 65532:65532
+
+ENV CADDYFILE_PATH=/etc/caddy/Caddyfile \
+    CADDY_ADMIN=off \
+    TZ=Europe/London \
+    PATH=/usr/local/bin:/usr/bin:/bin \
+    HOME=/tmp \
+    USER=dvdapp \
+    SHELL=/sbin/nologin
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD curl -f --max-time 3 http://localhost:80/health || exit 1
+
+EXPOSE 80
+
+ENTRYPOINT ["/usr/bin/caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
