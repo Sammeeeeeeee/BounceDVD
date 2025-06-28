@@ -10,12 +10,12 @@
     root * /srv
     file_server {
         index main.html
+        hide .git .env Dockerfile docker-compose.yml
     }
 
     handle /health {
         respond "OK" 200
     }
-
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
@@ -23,6 +23,12 @@
         X-Frame-Options "DENY"
         X-XSS-Protection "1; mode=block"
         Referrer-Policy "no-referrer"
+        Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; script-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        Cross-Origin-Embedder-Policy "require-corp"
+        Cross-Origin-Opener-Policy "same-origin"
+        Cross-Origin-Resource-Policy "same-origin"
+        Server ""in-Resource-Policy "same-origin"
         Server ""
     }
 }
