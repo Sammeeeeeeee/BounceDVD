@@ -12,59 +12,45 @@ LABEL maintainer="sam@samhosted.uk" \
       security.scan="required" \
       vendor="Sam"
 
-# Security: Create dedicated user with specific UID/GID
+# Create non-root user
 RUN addgroup -g 65532 -S dvdapp && \
     adduser -u 65532 -S dvdapp -G dvdapp
 
-# Security: Update packages and remove unnecessary components
-RUN apk update && \
-    apk upgrade && \
-    apk add --no-cache \
-        ca-certificates \
-        curl \
-        tzdata && \
-    rm -rf /var/cache/apk/* \
-           /tmp/* \
-           /var/tmp/*
+# Minimal packages, then clean
+RUN apk add --no-cache \
+      ca-certificates \
+      curl \
+      tzdata && \
+    rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 FROM base AS final
 
-# Create directories with correct ownership BEFORE copying files
-RUN mkdir -p /srv /var/log/caddy /data && \
-    chown -R dvdapp:dvdapp /srv /var/log/caddy /data && \
-    chmod 755 /srv /var/log/caddy /data
+# Copy app files and Caddyfile
+COPY --chown=dvdapp:dvdapp ./app /srv
+COPY --chown=dvdapp:dvdapp ./docker/caddyfile /etc/caddy/Caddyfile
 
-# Copy files with correct ownership
-COPY --chown=dvdapp:dvdapp --chmod=644 ./app/ /srv/
-COPY --chown=dvdapp:dvdapp --chmod=644 ./docker/caddyfile /etc/caddy/Caddyfile
+# Create and own writable dirs
+RUN mkdir -p /var/log/caddy /data && \
+    chown -R dvdapp:dvdapp /var/log/caddy /data && \
+    chmod 755 /var/log/caddy /data
 
-# Verify files are copied correctly
-RUN ls -la /srv/ && \
-    cat /srv/main.html | head -10
-
-# Security: Remove any potential temp/cache files and set strict permissions
+# Set correct permissions
 RUN find /srv -type f \( -name "*.tmp" -o -name "*.log" -o -name "*.bak" \) -delete && \
     find /srv -type f -exec chmod 644 {} \; && \
-    find /srv -type d -exec chmod 755 {} \; && \
-    chmod -R o-rwx /srv
+    find /srv -type d -exec chmod 755 {} \;
 
-# Security: Switch to non-root user
+# Run as non-root
 USER dvdapp:dvdapp
 
-# Security: Set environment variables
 ENV CADDYFILE_PATH=/etc/caddy/Caddyfile \
     CADDY_ADMIN=off \
     TZ=UTC
 
-# Health check for container monitoring
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:80/health || exit 1
 
-# Security: Expose only necessary ports
 EXPOSE 80 443
 
-# Security: Create volumes for persistent data and logs
 VOLUME ["/data", "/var/log/caddy"]
 
-# Security: Use exec form for better signal handling
 ENTRYPOINT ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
