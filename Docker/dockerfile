@@ -1,10 +1,73 @@
-FROM caddy:2-alpine
 
-COPY --chown=nobody:nobody ./app /srv
+FROM caddy:2.7.6-alpine AS base
 
-USER nobody:nobody
-ENV CADDYFILE_PATH=/etc/caddy/Caddyfile
 
-COPY --chown=nobody:nobody ./docker/caddyfile /etc/caddy/Caddyfile
+ARG CADDY_VERSION=2.7.6
+ARG BUILD_DATE
+ARG VCS_REF
 
-VOLUME ["/data"]
+LABEL maintainer="sam@samhosted.uk" \
+      version="0.2.0" \
+      description="Secure DVD Bounce Application" \
+      build-date=$BUILD_DATE \
+      vcs-ref=$VCS_REF \
+      security.scan="required" \
+      vendor="Sam"
+
+# Security: Create dedicated user with specific UID/GID
+RUN addgroup -g 65532 -S dvdapp && \
+    adduser -u 65532 -S dvdapp -G dvdapp
+
+# Security: Update packages and remove unnecessary components
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache \
+        ca-certificates \
+        curl \
+        tzdata && \
+    rm -rf /var/cache/apk/* \
+           /tmp/* \
+           /var/tmp/*
+
+# Security: Remove unnecessary packages that could expand attack surface
+RUN apk del --purge \
+    alpine-keys \
+    apk-tools
+
+FROM base AS final
+
+# Security: Set secure file permissions before copying
+COPY --chown=dvdapp:dvdapp --chmod=644 ./app /srv
+COPY --chown=dvdapp:dvdapp --chmod=644 ./docker/caddyfile /etc/caddy/Caddyfile
+
+# Security: Create necessary directories with correct permissions
+RUN mkdir -p /var/log/caddy /data && \
+    chown -R dvdapp:dvdapp /var/log/caddy /data && \
+    chmod 755 /var/log/caddy /data
+
+# Security: Remove any potential temp/cache files and set strict permissions
+RUN find /srv -type f \( -name "*.tmp" -o -name "*.log" -o -name "*.bak" \) -delete && \
+    find /srv -type f -exec chmod 644 {} \; && \
+    find /srv -type d -exec chmod 755 {} \; && \
+    chmod -R o-rwx /srv
+
+# Security: Switch to non-root user
+USER dvdapp:dvdapp
+
+# Security: Set environment variables
+ENV CADDYFILE_PATH=/etc/caddy/Caddyfile \
+    CADDY_ADMIN=off \
+    TZ=UTC
+
+# Health check for container monitoring
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:80/health || exit 1
+
+# Security: Expose only necessary ports
+EXPOSE 80 443
+
+# Security: Create volumes for persistent data and logs
+VOLUME ["/data", "/var/log/caddy"]
+
+# Security: Use exec form for better signal handling
+ENTRYPOINT ["caddy", "run", "--config", "/etc/caddy/Caddyfile"]
