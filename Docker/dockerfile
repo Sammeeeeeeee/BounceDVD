@@ -1,6 +1,4 @@
-
 FROM caddy:2.7.6-alpine AS base
-
 
 ARG CADDY_VERSION=2.7.6
 ARG BUILD_DATE
@@ -29,21 +27,20 @@ RUN apk update && \
            /tmp/* \
            /var/tmp/*
 
-# Security: Remove unnecessary packages that could expand attack surface
-RUN apk del --purge \
-    alpine-keys \
-    apk-tools
-
 FROM base AS final
 
-# Security: Set secure file permissions before copying
-COPY --chown=dvdapp:dvdapp --chmod=644 ./app /srv
+# Create directories with correct ownership BEFORE copying files
+RUN mkdir -p /srv /var/log/caddy /data && \
+    chown -R dvdapp:dvdapp /srv /var/log/caddy /data && \
+    chmod 755 /srv /var/log/caddy /data
+
+# Copy files with correct ownership
+COPY --chown=dvdapp:dvdapp --chmod=644 ./app/ /srv/
 COPY --chown=dvdapp:dvdapp --chmod=644 ./docker/caddyfile /etc/caddy/Caddyfile
 
-# Security: Create necessary directories with correct permissions
-RUN mkdir -p /var/log/caddy /data && \
-    chown -R dvdapp:dvdapp /var/log/caddy /data && \
-    chmod 755 /var/log/caddy /data
+# Verify files are copied correctly
+RUN ls -la /srv/ && \
+    cat /srv/main.html | head -10
 
 # Security: Remove any potential temp/cache files and set strict permissions
 RUN find /srv -type f \( -name "*.tmp" -o -name "*.log" -o -name "*.bak" \) -delete && \

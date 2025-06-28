@@ -1,130 +1,15 @@
-
-# Caddyfile - Secure Configuration
 {
-    # Global security settings
     admin off
-    email security@samhosted.uk
-    
-    # Security: Disable automatic HTTPS for internal testing
-    # Remove this line for production with proper certificates
     auto_https off
-    
-    # Security: Set server name for identification
-    servers {
-        name dvd-bounce-server
-    }
-    
-    # Logging configuration
-    log {
-        output file /var/log/caddy/access.log {
-            roll_size 100mb
-            roll_keep 5
-            roll_keep_for 720h
-        }
-        format json
-        level INFO
-    }
 }
 
-# HTTPS Configuration (Production)
-:443 {
-    # TLS Configuration
-    tls internal {
-        protocols tls1.2 tls1.3
-    }
-    
-    # Security Headers
-    header {
-        # HSTS
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        
-        # Content Security Policy
-        Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests"
-        
-        # Additional Security Headers
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        X-XSS-Protection "1; mode=block"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        
-        # Feature Policy / Permissions Policy
-        Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=(), usb=(), accelerometer=(), gyroscope=(), magnetometer=(), fullscreen=(self)"
-        
-        # Remove server identification
-        -Server
-        -X-Powered-By
-    }
-    
-    # Rate limiting
-    rate_limit {
-        zone static {
-            key {remote_host}
-            events 60
-            window 1m
-        }
-        zone api {
-            key {remote_host}
-            events 10
-            window 1m
-        }
-    }
-    
-    # Main application
+:80 {
     root * /srv
-    encode gzip zstd
-    
-    # Security: Strict file serving
     file_server {
-        hide .*
         index main.html
     }
     
-    # Health check endpoint
     handle /health {
-        respond "OK" 200 {
-            header Content-Type "text/plain"
-        }
-    }
-    
-    # Security: Handle 404s without information disclosure
-    handle_errors {
-        @not_found expression {http.error.status_code} == 404
-        respond @not_found "Not Found" 404 {
-            header Content-Type "text/plain"
-        }
-        
-        respond "Server Error" {http.error.status_code} {
-            header Content-Type "text/plain"
-        }
-    }
-    
-    # Security: Redirect root to main application
-    redir / /main.html 302
-    
-    # Access logging with security context
-    log {
-        output file /var/log/caddy/access.log
-        format json {
-            time_format "2006-01-02T15:04:05.000Z07:00"
-            message_key "msg"
-            level_key "level"
-            time_key "timestamp"
-            caller_key "caller"
-            stacktrace_key "stacktrace"
-        }
-        level INFO
-    }
-}
-
-# HTTP to HTTPS Redirect
-:80 {
-    # Security: Force HTTPS redirect
-    redir https://{host}{uri} permanent
-    
-    # Exception: Health check on HTTP for load balancer
-    handle /health {
-        respond "OK" 200 {
-            header Content-Type "text/plain"
-        }
+        respond "OK" 200
     }
 }
