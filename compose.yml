@@ -4,29 +4,24 @@ services:
   dvd-bounce:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/dockerfile  
       args:
         BUILD_DATE: ${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}
         VCS_REF: ${VCS_REF:-$(git rev-parse --short HEAD)}
-    container_name: dvd-bounce-secure
+    container_name: dvd-bounce
 
-    # Run as non-root user
     user: "65532:65532"
 
-    # Read-only root filesystem
     read_only: true
 
-    #  Remove unnecessary capabilities
     cap_drop:
       - ALL
     cap_add:
       - NET_BIND_SERVICE
 
-    # No new privileges
     security_opt:
       - no-new-privileges:true
 
-    # Resource limits
     deploy:
       resources:
         limits:
@@ -36,23 +31,15 @@ services:
           cpus: '0.1'
           memory: 64M
 
-    # Temporary filesystem for writable areas
-    tmpfs:
-      - /tmp:noexec,nosuid,size=10m
-      - /var/run:noexec,nosuid,size=10m
 
     ports:
-      - "8080:80"
+      - "8080:80"   # HTTP
 
-    volumes:
-      - caddy_data:/data
-      - caddy_logs:/var/log/caddy
 
     environment:
-      - TZ=UTC
+      - TZ=Europe/London
       - CADDY_ADMIN=off
 
-    # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
       interval: 30s
@@ -70,9 +57,3 @@ networks:
     driver: bridge
     driver_opts:
       com.docker.network.bridge.enable_icc: "false"
-
-volumes:
-  caddy_data:
-    driver: local
-  caddy_logs:
-    driver: local
